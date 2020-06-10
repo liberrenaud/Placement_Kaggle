@@ -1,0 +1,92 @@
+---
+title: "EDA Kaggle Placements"
+author: "Renaud Liber"
+date: "10-6-2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r libraries}
+
+devtools::install_github('bbc/bbplot')
+
+library(tidyverse)
+library(janitor)
+library(DataExplorer)
+library(tidytext)
+library(bbplot)
+
+theme_set(theme_light())
+
+```
+
+
+```{r}
+placement_raw <- read_csv("00_Data/datasets_596958_1073629_Placement_Data_Full_Class.csv")
+```
+
+
+
+
+
+```{r}
+
+placement <- placement_raw %>% 
+  rename(Grade_Secondary        = ssc_p,
+         Grade_Higher_Secondary = hsc_p,
+         Spec_Higher_Secondary  = hsc_s,
+         Grade_Degree           = degree_p,
+         Spec_Degree            = degree_t,
+         work_Experience        = workex,
+         Grade_Employability    = etest_p,
+         Spec_MBA               = specialisation,
+         Grade_MBA              = mba_p,
+         Placement_Status       = status,
+         Salary                 = salary
+        ) %>% 
+  clean_names()
+
+```
+
+
+
+
+```{r}
+glimpse(placement)
+```
+
+
+```{r}
+placement %>% DataExplorer::plot_missing()
+```
+
+What are the most common degree 
+
+```{r}
+placement %>% 
+  select(sl_no,starts_with("spec")) %>% 
+  pivot_longer(contains("spec")) %>% 
+  group_by(name,value) %>% 
+  summarise(n_student=n()) %>% 
+  arrange(-n_student) %>% 
+  ungroup() %>% 
+  mutate(name=name %>% str_remove("spec_") %>% str_replace("_"," ") %>% str_to_title() %>% str_replace("Mba","MBA"),
+          value=reorder_within(value,by=n_student,within = name)) %>% 
+  ggplot(aes(value,n_student,fill=name))+
+  geom_col()+
+  facet_wrap(~name,scales = "free")+
+  coord_flip()+ 
+  scale_x_reordered()+ # Argument is key to have a nice x axis
+  labs(title = "Student Specialisation by Degree",
+       y="Number of Students")
+  
+
+```
+
+
+
+How did each 
