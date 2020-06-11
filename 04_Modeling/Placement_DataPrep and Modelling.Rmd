@@ -1,0 +1,144 @@
+---
+title: "Machine Learning"
+author: "Renaud Liber"
+date: "11-6-2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r libraries}
+
+
+#install.packages("tibble")
+
+
+library(tidyverse)
+library(janitor)
+library(tidymodels)
+
+theme_set(theme_light())
+
+getwd()
+
+```
+
+
+```{r}
+placement_raw <- read_csv("../00_Data/datasets_596958_1073629_Placement_Data_Full_Class.csv")
+```
+
+```{r}
+
+placement <- placement_raw %>% 
+  rename(Grade_Secondary        = ssc_p,
+         Grade_Higher_Secondary = hsc_p,
+         Spec_Higher_Secondary  = hsc_s,
+         Grade_Degree           = degree_p,
+         Spec_Degree            = degree_t,
+         work_Experience        = workex,
+         Grade_Employability    = etest_p,
+         Spec_MBA               = specialisation,
+         Grade_MBA              = mba_p,
+         Placement_Status       = status,
+         Salary                 = salary
+        ) %>% 
+  clean_names() %>% 
+  mutate(placement_status=case_when(placement_status=="Placed"~1,
+                                   TRUE                     ~0) %>% as_factor())
+
+```
+
+
+We will look after the creation of two algorithm - first one will be used to define if a person is or not placed
+
+
+
+```{r}
+placement %>% glimpse()
+
+```
+
+# Splitting the data
+
+```{r intial split}
+set.seed(123)
+
+placement_split <- initial_split(placement,prop=3/4,strata = placement_status)
+
+train_data <- training(placement_split)
+test_data  <- testing(placement_split)
+
+
+```
+
+
+# Creation of the recipe - feature engineering
+
+```{r}
+
+placement_recipe <- 
+  recipe(placement_status~.,data=train_data) %>% 
+  update_role(sl_no,new_role = "ID") %>% 
+  step_rm(salary) %>%
+  step_dummy(all_nominal(), -all_outcomes()) %>% 
+  step_normalize(all_numeric(), -all_outcomes())
+
+placement_recipe
+  
+
+```
+
+# Set the engine
+
+```{r}
+
+lr_mod <- 
+  logistic_reg() %>% 
+  set_engine("glm")
+
+```
+
+
+# Placement Workflow
+
+```{r}
+Placement_workflow <- 
+  workflow() %>% 
+  add_model(lr_mod) %>% 
+  add_recipe(placement_recipe)
+```
+
+```{r}
+Placement_fit <- 
+  Placement_workflow %>% 
+  fit(data = train_data)
+```
+
+
+```{r}
+Placement_fit %>% 
+  pull_workflow_fit() %>% 
+  tidy()
+```
+
+
+```{r}
+placement_pred <- predict(Placement_fit, test_data) %>% 
+  bind_cols(test_data %>% select(placement_status))
+```
+
+```{r confusion matrix}
+placement_pred %>%
+  conf_mat(placement_status, .pred_class) %>%
+  pluck(1) %>%
+  as_tibble() %>%
+  ggplot(aes(Prediction, Truth, alpha = n)) +
+  geom_tile(show.legend = FALSE) +
+  geom_text(aes(label = n), colour = "white", alpha = 1, size = 8)
+
+```
+

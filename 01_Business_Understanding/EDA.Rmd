@@ -12,21 +12,26 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r libraries}
 
-devtools::install_github('bbc/bbplot')
+#devtools::install_github('bbc/bbplot')
+#install.packages("GGally")
 
 library(tidyverse)
 library(janitor)
 library(DataExplorer)
 library(tidytext)
 library(bbplot)
+library(networkD3)
+library(GGally)
 
 theme_set(theme_light())
+
+getwd()
 
 ```
 
 
 ```{r}
-placement_raw <- read_csv("00_Data/datasets_596958_1073629_Placement_Data_Full_Class.csv")
+placement_raw <- read_csv("../00_Data/datasets_596958_1073629_Placement_Data_Full_Class.csv")
 ```
 
 
@@ -89,4 +94,95 @@ placement %>%
 
 
 
-How did each 
+```{r}
+MoveHStoD <- placement %>% 
+  group_by(spec_higher_secondary,spec_degree) %>% 
+  summarise(value=n()) %>% 
+  ungroup() %>% 
+  rename(source=spec_higher_secondary,
+         target=spec_degree)
+
+MBAtoPlacement <- placement %>% 
+  group_by(spec_mba,placement_status) %>% 
+  summarise(value=n()) %>% 
+  ungroup() %>% 
+  rename(source=spec_mba,
+         target=placement_status)
+
+
+Links_source <- placement %>% 
+  group_by(spec_degree,spec_mba) %>% 
+  summarise(value=n()) %>% 
+  ungroup() %>% 
+  rename(source=spec_degree,
+         target=spec_mba,
+         ) %>% 
+  bind_rows(MoveHStoD) %>% 
+  bind_rows(MBAtoPlacement)
+
+
+temp_ls <- Links_source %>% select(source, target)
+
+
+listing <- data.frame(name=unlist(temp_ls,use.names = FALSE)) %>% 
+    distinct() %>% 
+    mutate(ID=row_number()-1)
+
+Links_source <- Links_source %>% 
+    left_join(listing,by=c("source"="name")) %>% 
+    left_join(listing,by=c("target"="name")) %>% 
+    transmute(source=ID.x,
+              target=ID.y,
+              value) 
+
+ #my_color <- 'd3.scaleOrdinal() .domain(["a", "b"]) .range(["#EB8C00", "#AA2417"])'
+  
+  sankeyNetwork(Links = Links_source, Nodes = listing, Source = "source",
+                Target = "target", Value = "value", NodeID = "name",
+                units = " Employees", fontSize = 12, nodeWidth = 30, 
+                colourScale=my_color, 
+                iterations = 0)
+  
+  
+  my_color <- 'd3.scaleOrdinal() .domain(["a", "b"]) .range(["#EB8C00", "#AA2417"])'
+  
+  sankeyNetwork(Links = Links_source, Nodes = listing, Source = "source",
+                Target = "target", Value = "value", NodeID = "name",
+                units = " Students", fontSize = 12, nodeWidth = 30, 
+                #colourScale=my_color, 
+                iterations = 0)
+
+```
+
+
+# Look at the missing salary
+
+Base on below it seems that salary that are not available is linked to the fact that the person was not placed.
+Data could then be used for two types of analysis
++ classification problem - who end up place or not place
++ Regression problem - what is the expected starting salary if placed
+
+```{r}
+
+placement %>% 
+  select(placement_status,salary) %>% 
+  mutate(salary =case_when(is.na(salary)~"Not_Avail",
+                           TRUE         ~ "Avail")) %>% 
+  count(placement_status,salary)
+
+
+```
+
+
+# Dive into the feature distibrution
+
+Salary should get normalization as log distribution the rest is pretty much normalized with exception of employability grade
+
+```{r}
+
+placement %>% 
+  select(is.numeric) %>% 
+  ggpairs()
+
+```
+
